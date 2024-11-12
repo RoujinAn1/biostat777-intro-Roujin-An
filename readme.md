@@ -4,5 +4,6 @@ For PH.140.777 Statistical Programming Paradigms and Workflows!
 The publically available website is here:
 https://roujinan.quarto.pub/statscomp-project/
 
-please see index.qmd for re-rendering 
+The data analysis website qmd is in Example analysis.qmd
+
 
