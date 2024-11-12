@@ -1,0 +1,12 @@
+---
+title: "StatsComp_project1"
+author: Roujin An
+email: ran8@jhmi.edu
+date: 11.08.24
+---
+
+# Welcome to My Website
+
+Hi, I'm Roujin An. I’m passionate about genomics and data science, and I also do wet-lab research, currently working in vascular research. In my free time, I enjoy reading and writing, and sleeping, of course.
+
+![Please enjoy the photo of a cat writing](image/cat_typing.png)

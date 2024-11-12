@@ -1,0 +1,11 @@
+---
+title: "About"
+---
+
+# About Me
+
+Welcome to my website! I am a passionate researcher and data scientist currently pursuing my PhD in Biomedical Engineering at Johns Hopkins University. My research focuses on computational genomics and vascular biology, particularly investigating the genetic mechanisms underlying atherosclerosis. I aim to leverage bioinformatics and data science to uncover insights that can drive innovative therapies and improve global health.
+
+Before embarking on my PhD journey, I earned a Master’s degree in Biochemistry and Molecular Biology, where I specialized in single-cell RNA sequencing and retinal development. I have also conducted research in diverse fields such as peptide therapeutics and long non-coding RNAs during my undergraduate studies. These experiences have shaped my multidisciplinary approach to solving complex biological problems.
+
+Outside of academia, I enjoy exploring new technologies, hiking, and indulging in creative pursuits like writing. I am also deeply committed to promoting equity in science, believing that breakthroughs in research should benefit all communities. Thank you for visiting my site, and feel free to explore more about my work and interests!

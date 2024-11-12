@@ -1,0 +1,41 @@
+gene,cell_type
+Pecam1,Endothelial Cells
+Cdh5,Endothelial Cells
+Vwf,Endothelial Cells
+Nos3,Endothelial Cells
+Acta2,Smooth Muscle Cells
+Myh11,Smooth Muscle Cells
+Cnn1,Smooth Muscle Cells
+Tagln,Smooth Muscle Cells
+Cd68,Macrophages
+Cd14,Macrophages
+Msr1,Macrophages
+Itgam,Macrophages
+Apoe,Foam Cells
+Acat1,Foam Cells
+Cd36,Foam Cells
+Plin2,Foam Cells
+Cd3e,T Cells
+Cd4,T Cells
+Cd8a,T Cells
+Cd28,T Cells
+Cd19,B Cells
+Ms4a1,B Cells
+Cd22,B Cells
+Ighm,B Cells
+Itgax,Dendritic Cells
+Cd83,Dendritic Cells
+Cd209,Dendritic Cells
+H2-aa,Dendritic Cells
+Vim,Fibroblasts
+Fap,Fibroblasts
+Fn1,Fibroblasts
+Pdgfra,Fibroblasts
+Itga2b,Platelets
+Itgb3,Platelets
+Gp1ba,Platelets
+Selp,Platelets
+Ceacam6,Neutrophils
+Mpo,Neutrophils
+Fut4,Neutrophils
+Elane,Neutrophils

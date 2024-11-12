@@ -1,0 +1,28 @@
+project:
+  type: website
+
+website:
+  title: "StatsComp Project"
+  navbar:
+    left:
+      - href: index.qmd
+        text: Home
+      - href: about.qmd
+        text: About
+      - href: Example analysis.qmd
+        text: Example Analysis
+
+format:
+  html:
+    resources: 
+      - image 
+      - DataAnalysis
+    theme: cosmo
+    css: styles.css
+    toc: true
+    bibliography: references.bib
+
+
+
+editor: visual
+

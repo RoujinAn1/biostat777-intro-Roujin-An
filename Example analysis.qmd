@@ -1,0 +1,357 @@
+---
+title: "Example analysis"
+bibliography: references.bib
+author: "Roujin An"   
+date: "`r Sys.Date()`"  
+format:
+  html:
+    toc: true            # Adds a table of contents
+    toc-depth: 2         # Limits TOC to 2 levels (h1 and h2)
+    code-fold: true      # Collapses code blocks for cleaner display
+    number-sections: true  # Number each section
+---
+
+## Question to be answered
+
+1.  *Which genes are most differentially expressed between specific cell clusters, and how do these genes inform the functional differences between these cell types?*
+2.  *What biological pathways are enriched in differentially expressed genes, and how might these pathways be relevant to disease mechanisms?*
+3.  *How do specific clusters (e.g., vascular smooth muscle cells) differ in their expression of key marker genes compared to other clusters?*
+
+## Intended Audiences
+
+The intended audience for this analysis includes **academic researchers and clinicians** focusing on vascular biology and human cardiovascular health. This analysis is particularly relevant for those studying cellular heterogeneity and gene expression patterns in normal human aorta tissue, providing a baseline for comparison with diseased states such as atherosclerosis. Additionally, **bioinformaticians and data scientists** interested in single-cell RNA-seq methodologies can benefit from the data wrangling and visualization techniques applied here. Finally, **biotech and pharmaceutical industry professionals** may find value in understanding baseline gene expression profiles to guide early-stage research in cardiovascular therapeutics and biomarker discovery.
+
+## Original data
+
+GSE216860 is a publicly available dataset from the Gene Expression Omnibus (GEO) that provides single-cell RNA sequencing (scRNA-seq) data of normal human ascending aortic tissues from donors of varying ages.
+
+"The study aimed to investigate age-dependent changes in cellular composition, phenotypes, and cell-cell communication within the aorta. The dataset includes samples from six organ donors, categorized into a young group (ages 3 months, 1 year, 3 years, and 12 years) and an old group (ages 57 and 58 years). Analysis of 65,470 cells identified ten cell types, including endothelial cells, smooth muscle cells, fibroblasts, mesenchymal cells, macrophages, and various immune cells. "
+
+link to the dataset: <https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE216860>[@GSE216860]
+
+Here we work with the pre-processed DEG dataset after data QC, normalization, dimension reduction and DEG analysis (FindAllMarkers) using Seurat pipeline[@seurat2015]. Given the original Seurat object is very large to load, we are directly loading the DEG marker genes .csv file.
+
+## Data Dictionary
+
+| **Column** | **Description** |
+|------------------------------------|------------------------------------|
+| `gene` | Gene name |
+| `avg_log2FC` | Average log2 fold change between clusters |
+| `pct.1` | Percentage of cells expressing the gene in Cluster 1/percentage of cells expressing the gene in the testing cluster (markers) |
+| `pct.2` | Percentage of cells expressing the gene in Cluster 7/percentage of cells expressing the gene in all the other clusters (markers) |
+| `p_val_adj` | Adjusted p-value for differential expression |
+| `cell_type` | Type of cell where the gene is expressed |
+| `p_val` | P-value for differential expression |
+| `cluster` | Cluster in which the gene is analyzed |
+
+## Data loading
+
+```{r}
+# Loading packages
+library(dplyr)
+library(tidyverse)
+library(patchwork)
+library(openxlsx)
+library(ggplot2)
+library(stringr)
+library(clusterProfiler)
+library(org.Hs.eg.db)
+library(enrichplot)
+library(DOSE)
+```
+
+The UMAP of the Seurat object after scTransform:
+
+![UMAP of the normal human aorta scRNA-seq data](DataAnalysis/UMAP.png){fig-align="center"}
+
+```{r}
+# loading data
+markers <- read.csv('/Users/roujinan/Desktop/StatsComp_project1/DataAnalysis/markers_data.csv')
+head(markers)
+```
+
+We have another marker genes and cell type mapping dictionary, we will load this data for mapping cluster identity. This is an empirical mapping of markers genes of major aortic cell types. However this .csv is based on mouse gene, we will need to convert all lowercase letter in gene names into uppercase, and change one gene **H2-aa** to **HLA-DRA** to completely change the list of mouse markers into human markers.
+
+```{r}
+# Loading cell type marker genes dictionary
+Mapper <- read.csv('/Users/roujinan/Desktop/StatsComp_project1/DataAnalysis/atherosclerotic_plaque_marker_genes.csv')
+head(Mapper)
+
+# Use mutate to replace 'H2-aa' with 'HLA-DRA' in the 'gene' column
+Mapper<- Mapper %>%
+  mutate(gene = ifelse(gene == "H2-aa", "HLA-DRA", gene))
+
+# Convert 'gene' column to uppercase, 1st usage of dplyr function mutate
+Mapper <- Mapper %>%
+  mutate(gene = toupper(gene))
+
+print(Mapper)
+
+```
+
+Data preparation is done. Next we want to select the genes that are present in both dataset, and to map the identity of each cluster.
+
+```{r}
+# Innerjoin two dataset and arrange the joint output. The use of 3 more dolyr and tidyr function: inner_join, select and arrange.
+
+IJ <- inner_join(markers, Mapper,by= 'gene')
+
+ClusterIdentity<- IJ %>% dplyr::select(c('gene','cell_type','p_val_adj','cluster')) %>% arrange(cluster)
+
+ClusterIdentity
+```
+
+Based on the chart, it will be easy to map the cluster identity with the markers. Combining with the original markers data, question 1 can be answered. Since with this results, it was apparent that some clusters, for example cluster 18 contains multiple immune cell type markers such as Macrophages, Dendritic cells, Foam cells and T cells, it may be wise to conduct further subclustering to the original data. We didn't load the data here, thus we don't assert cluster identity for these "mixed clusters".
+
+However, cluster 0 shows clear Fibroblast markers and cluster1 shows clear vascular smooth muscle cells markers expression. At the same time, cluster 7 also seems to be a smooth muscle cell cluster, yet it was quite separated from cluster 1 on the UMAP. Thus we will continue here with these three clusters.
+
+Next, we want to know the differentially expressed genes between the two smooth muscle cell cluster 1 and 7. We ran DEG between the two clusters in seurat on the original data, which is not shown here. The data output is VSMCmarkers.csv, which will be loaded here for further analysis.
+
+```{r}
+# Loading VSMCmarkers
+VSMCmarkers <- read.csv('/Users/roujinan/Desktop/StatsComp_project1/DataAnalysis/VSMCmarkers_data.csv')
+head(VSMCmarkers)
+
+# Filter significant markers with adjusted p-value < 0.05, the application of the 5th dplyr and tidyr function: filter
+significant_VSMCmarkers <- VSMCmarkers %>%
+  dplyr::filter(p_val_adj < 0.05)
+
+dim(VSMCmarkers)
+dim(significant_VSMCmarkers)
+```
+
+::: callout-note
+**Note**: The analysis identified key differentially expressed genes between Cluster 1 and Cluster 7. Both clusters are VSMC clusters. We are interested in exploring the difference between these two clusteres, which is very likely to me batch/sample difference due to different sample age.
+:::
+
+## Visualization of DEG between VSMC clusters with volcano plots
+
+Plots below were created using ggplot2, a powerful data visualization package[@ggplot22016].
+
+```{r}
+# Replace zero p-values with a very small number to avoid issues in the plot
+significant_VSMCmarkers <- significant_VSMCmarkers %>%
+  mutate(p_val_adj = ifelse(p_val_adj == 0, 1e-350, p_val_adj))
+
+# Volcano plot
+ggplot(significant_VSMCmarkers, aes(x = avg_log2FC, y = -log10(p_val_adj))) +
+  geom_point(aes(color = p_val_adj < 0.001 & abs(avg_log2FC) > 3), alpha = 0.5) +
+  labs(
+    title = "Volcano Plot of Cluster 1 vs Cluster 7",
+    subtitle = "Highlighting significant markers (p_val_adj < 0.001 and avg_log2FC > 3)",
+    x = "Log2 Fold Change",
+    y = "-Log10 Adjusted P-Value",
+    caption = "Data source: GSE216860"
+  ) +
+  theme_minimal() +
+  scale_color_manual(values = c("grey", "red")) 
+# Grey for non-significant, red for significant
+```
+
+## Barplot
+
+```{r}
+
+# Select top 10 markers by absolute log fold change
+top_markers <- markers %>%
+  arrange(desc(abs(avg_log2FC))) %>%
+  head(10)
+
+# Bar plot
+ggplot(top_markers, aes(x = reorder(gene, abs(avg_log2FC)), y = abs(avg_log2FC), fill = gene)) +
+  geom_col(show.legend = FALSE) +
+  labs(
+    title = "Top 10 Markers by Absolute Log2 Fold Change",
+    subtitle = "Cluster 1 vs Cluster 7",
+    x = "Gene",
+    y = "Absolute Log2 Fold Change",
+    caption = "Top genes based on |log2FC|"
+  ) +
+  coord_flip() +
+  theme_minimal()
+```
+
+## Dotplots demonstrating DEG expression between clusters
+
+This plot will visualize the relationship between pct.1 and pct.2 for multiple genes, faceted by each gene.
+
+```{r}
+# Select a few significant genes for visualization
+selected_genes <- significant_VSMCmarkers %>%
+  filter(gene %in% c("ACTB",'MYH10', 'IGFBP2'))  # Example gene names
+
+# Faceted scatter plot
+ggplot(selected_genes, aes(x = pct.1, y = pct.2)) +
+  geom_point(aes(color = abs(avg_log2FC)), size = 4, alpha = 0.7) +  # Color points by log2FC
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "grey") +  # Equality line
+  facet_wrap(~ gene) +  # Facet by gene
+  labs(
+    title = "Faceted Scatter Plot of % Cells Expressing in Cluster 1 vs Cluster 7",
+    subtitle = "Colored by Absolute Log2 Fold Change",
+    x = "% Cells Expressing (Cluster 1)",
+    y = "% Cells Expressing (Cluster 7)",
+    color = "Abs(Log2FC)",
+    caption = "Dashed line indicates equal expression percentages"
+  ) +
+  scale_color_gradient(low = "blue", high = "red") +  # Color gradient
+  theme_minimal()
+```
+
+## Heatmap (geom_tile()) for Expression percentage of genes with top50 fold_change
+
+```{r}
+# Reshape data for heatmap
+all_genes_long <- significant_VSMCmarkers %>%
+  arrange(desc(abs(avg_log2FC))) %>%
+  head(50) %>%
+  pivot_longer(cols = c(pct.1, pct.2), names_to = "cluster", values_to = "expression_pct")
+
+# Heatmap for all genes
+ggplot(all_genes_long, aes(x = cluster, y = gene, fill = expression_pct)) +
+  geom_tile(color = "white") +  # Heatmap tiles
+  scale_fill_gradient(low = "blue", high = "red") +  # Gradient color scale
+  labs(
+    title = "Heatmap of Expression Percentages for top50 Genes(fold change)",
+    subtitle = "Comparison of Cluster 1(pct.1) and Cluster 7(pct.2)",
+    x = "Cluster",
+    y = "Gene",
+    fill = "% Cells Expressing",
+    caption = 'Heatmap shows percentage of cells expressing each gene per cluster'
+  ) +
+  theme_minimal() +
+  theme(
+    axis.text.y = element_text(size = 5),  # Adjust for many genes
+    axis.text.x = element_text(angle = 45, hjust = 1)
+  )
+```
+
+::: callout-warning
+**Warning**: The percentages shown here for `pct.1` and `pct.2` are based on seurat FindMarkers function, pct.1 and pct.2 are separately set in the function argument. Do not assume the identities of two clusters here. The pct.1 and pct.2 from the markers data was generated with FindAllMarkers function in seurat, where pct.1 is the cluster of interests, pct.2 is all the other clusters.
+:::
+
+## Enrichment analysis
+
+```{r}
+deg_genes <- significant_VSMCmarkers$gene
+# Convert gene symbols to Entrez IDs
+entrez_ids <- bitr(deg_genes, fromType = "SYMBOL", toType = "ENTREZID", OrgDb = org.Hs.eg.db)
+go_enrichment <- enrichGO(
+  gene = entrez_ids$ENTREZID,
+  OrgDb = org.Hs.eg.db,
+  keyType = "ENTREZID",
+  ont = "BP",  # Biological Process
+  pAdjustMethod = "BH",
+  pvalueCutoff = 0.001
+)
+```
+
+```{r}
+dotplot(go_enrichment, showCategory = 20, size = "GeneRatio") + 
+  ggtitle("GO Enrichment Analysis") +
+  scale_size(range = c(1, 4)) +  # Adjusts the minimum and maximum dot sizes
+  theme_minimal() +
+  theme(
+    plot.title = element_text(size = 12),
+    axis.text.x = element_text(size = 8),
+    axis.text.y = element_text(size = 4),
+    legend.text = element_text(size = 8),
+    legend.title = element_text(size = 10)
+  )
+```
+
+```{r}
+kegg_enrichment <- enrichKEGG(
+  gene = entrez_ids$ENTREZID,
+  organism = 'hsa',  # Homo sapiens
+  pvalueCutoff = 0.001
+)
+
+dotplot(kegg_enrichment, showCategory = 20, size = "GeneRatio") +  # You can use another numeric value column like "Count"
+  ggtitle("GO Enrichment Analysis") +
+  scale_size(range = c(1, 4)) +  # Adjusts the minimum and maximum dot sizes
+  theme_minimal() +
+  theme(
+    plot.title = element_text(size = 12),
+    axis.text.x = element_text(size = 8),
+    axis.text.y = element_text(size = 5),
+    legend.text = element_text(size = 8),
+    legend.title = element_text(size = 10)
+  )
+
+```
+
+```{r}
+# Convert gene symbols to Entrez IDs
+entrez_ids2 <- bitr(
+  significant_VSMCmarkers$gene,
+  fromType = "SYMBOL",    # Input type (gene symbols)
+  toType = "ENTREZID",    # Output type (Entrez IDs)
+  OrgDb = org.Hs.eg.db    # Database for human genes
+)
+# Merge Entrez IDs back into your original data
+deg_data <- merge(significant_VSMCmarkers, entrez_ids, by.x = "gene", by.y = "SYMBOL")
+# View the data with Entrez IDs
+ranked_genes <- deg_data %>%
+  arrange(desc(avg_log2FC)) %>%
+  pull(avg_log2FC)  # Pull log2FoldChange values as vector
+
+# Assign Entrez IDs as names
+names(ranked_genes) <- deg_data %>%
+  arrange(desc(avg_log2FC)) %>%
+  pull(ENTREZID)  # Pull corresponding Entrez IDs
+
+# Verify structure
+head(ranked_genes)
+
+gsea_go <- gseGO(
+  geneList = ranked_genes,
+  OrgDb = org.Hs.eg.db,
+  keyType = "ENTREZID",
+  ont = "BP",
+  pvalueCutoff = 0.05
+)
+
+gsea_kegg <- gseKEGG(
+  geneList = ranked_genes,
+  organism = 'hsa',
+  pvalueCutoff = 0.05
+)
+
+```
+
+```{r}
+# Dotplot for GO
+dotplot(gsea_go, showCategory = 10) +
+  ggtitle("GSEA for GO Biological Process") +
+  theme_minimal()
+
+# Dotplot for KEGG
+dotplot(gsea_kegg, showCategory = 10) +
+  ggtitle("GSEA for KEGG Pathways") +
+  theme_minimal()
+```
+
+::: column-margin
+**Key Insight**: Single-cell RNA sequencing enables detailed exploration of cellular heterogeneity within complex tissues like the aorta. This analysis is based on Seurat output and ggplot2 to identify and visualize distinct marker genes and defferentially expressed genes across clusters.
+:::
+
+## Summary
+
+This analysis explored the cellular heterogeneity of human aortic tissues using single-cell RNA sequencing data from GSE216860. Differential expression analysis among all UMAP clusters identified cell type identity of each cluster, and DEG analysis between two vascular smooth muscle cell clusters Cluster 1 and Cluster 7 identified key marker genes associated with extracellular matrix and actin filament organization, and cytoskeleton function. Visualization techniques such as volcano plots, bar plots, and heatmaps highlighted significant trends and provided insights into the relative expression and ratio across clusters. These findings demonstrate the utility of computational methods in uncovering potential targets for understanding vascular diseases like atherosclerosis. This study emphasizes the power of integrating data science with biological research to gain actionable insights.
+
+## Functions Used
+
+| **Function** | **Purpose** | **Package** |
+|-----------------|--------------------------------------|-----------------|
+| `mutate()` | Adds new columns or modifies existing ones. | `dplyr` |
+| `filter()` | Filters rows based on specific conditions. | `dplyr` |
+| `arrange()` | Arranges rows in ascending or descending order based on column(s). | `dplyr` |
+| `inner_join()` | Joins two datasets based on matching keys in both tables. | `dplyr` |
+| `select()` | Selects specific columns from a dataset. | `dplyr` |
+| `pivot_longer()` | Converts wide-format data to long-format (e.g., column to rows). | `tidyr` |
+| `geom_point()` | Creates scatter plots or adds points to plots. | `ggplot2` |
+| `geom_bar()` | Creates bar plots to visualize categorical data. | `ggplot2` |
+| `geom_tile()` | Creates heatmaps by filling tiles with values. | `ggplot2` |
+| `facet_wrap()` | Splits a plot into multiple panels by a factor variable. | `ggplot2` |
+
+## References
